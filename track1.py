@@ -8,12 +8,7 @@ import torch
 import torch.nn.functional as F
 from sklearn.cluster import AffinityPropagation
 from tqdm import tqdm
-from transformers import (
-    AutoModel,
-    AutoTokenizer,
-    PreTrainedModel,
-    PreTrainedTokenizerFast,
-)
+from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerFast
 
 NEW_PERIOD = "new"
 OLD_PERIOD = "old"
