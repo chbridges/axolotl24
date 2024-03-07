@@ -1,3 +1,6 @@
+.ruff_cache/
+axolotl24_shared_task/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
