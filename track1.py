@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     arg("--pred", help="Path to the TSV file with system predictions", required=True)
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
+    arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     return parser.parse_args()
 
 
@@ -71,8 +72,17 @@ def main() -> None:
         new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
         old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
         with torch.no_grad():
-            new_outputs = model(**new_inputs).pooler_output
-            old_outputs = model(**old_inputs).pooler_output
+            new_outputs = model(**new_inputs)
+            old_outputs = model(**old_inputs)
+
+        # We achieve improvements in both ARI and F1 by using the raw last hidden state of
+        # the CLS token instead of using pooling_output (which feeds it through BertPooler)
+        if args.no_pooling:
+            new_outputs = model(**new_inputs).last_hidden_state[:, 0, :]
+            old_outputs = model(**old_inputs).last_hidden_state[:, 0, :]
+        else:
+            new_outputs = new_outputs.pooling_output
+            old_outputs = old_outputs.pooling_output
 
         # Clustering the new representations in order to get new senses
         ap = AffinityPropagation(random_state=42)
