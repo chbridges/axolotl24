@@ -8,7 +8,14 @@ import torch
 import torch.nn.functional as F
 from sklearn.cluster import AffinityPropagation
 from tqdm import tqdm
-from transformers import AutoModel, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerFast
+from transformers import (
+    AutoModel,
+    AutoTokenizer,
+    BatchEncoding,
+    PreTrainedModel,
+    PreTrainedTokenizerFast,
+)
+from transformers.utils import ModelOutput
 
 NEW_PERIOD = "new"
 OLD_PERIOD = "old"
@@ -31,6 +38,7 @@ def parse_args() -> argparse.Namespace:
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
+    arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     return parser.parse_args()
 
 
@@ -45,6 +53,43 @@ def load_model(
     return tokenizer, model
 
 
+# We achieve improvements in both ARI and F1 by using the raw last hidden state of
+# the CLS token instead of using pooling_output (which feeds it through BertPooler)
+def get_sentence_embeddings(outputs: ModelOutput, no_pooling: bool) -> torch.Tensor:
+    if no_pooling:
+        return outputs.last_hidden_state[:, 0, :]
+    return outputs.pooler_output
+
+
+# The baseline embeds the whole example sentence, even though the sentence as a whole can have
+# a different meaning from the target word. Here, we extract target word embeddings instead.
+# The new embeddings have a Cosine similarity with the sentence embeddings greater than 0.9,
+# but unfortunately, this approach negatively impacts the ARI and F1 scores.
+def find_target_id(example: str, target: str, orth: str) -> int:
+    idx = example.lower().find(target)
+    if idx == -1:
+        idx = example.lower().find(orth)
+    return max(0, idx)
+
+
+def find_token_id(inputs: BatchEncoding, batch_id: int, target_id: int) -> int:
+    token_id = inputs.char_to_token(batch_id, target_id)
+    if token_id is None:
+        return 1
+    return token_id
+
+
+def get_target_embeddings(
+    inputs: BatchEncoding, outputs: ModelOutput, examples: list, target: str, orths: list
+) -> torch.Tensor:
+    # Find the starting index of the target word in each example sentence; use 0 as a fallback
+    target_ids = [find_target_id(example, target, orth) for example, orth in zip(examples, orths)]
+    # Get the index of the 1st subtoken of the target word
+    token_ids = [find_token_id(inputs, i, j) for i, j in enumerate(target_ids)]
+    # Get the last hidden layer of this subtoken (or the baseline CLS token as a fallback)
+    return torch.stack([outputs.last_hidden_state[i, j, :] for i, j in enumerate(token_ids)])
+
+
 def main() -> None:
     args = parse_args()
     tokenizer, model = load_model(args)
@@ -54,6 +99,7 @@ def main() -> None:
         new = this_word[this_word[PERIOD_COLUMN] == NEW_PERIOD]
         old = this_word[this_word[PERIOD_COLUMN] == OLD_PERIOD]
         new_examples = new.example.to_list()
+        new_orth = new.orth.to_list()
         new_usage_ids = new[USAGE_ID_COLUMN]
         old_glosses = [
             f"{gl} {ex}".strip() if isinstance(ex, str) else gl
@@ -75,18 +121,17 @@ def main() -> None:
             new_outputs = model(**new_inputs)
             old_outputs = model(**old_inputs)
 
-        # We achieve improvements in both ARI and F1 by using the raw last hidden state of
-        # the CLS token instead of using pooling_output (which feeds it through BertPooler)
-        if args.no_pooling:
-            new_outputs = model(**new_inputs).last_hidden_state[:, 0, :]
-            old_outputs = model(**old_inputs).last_hidden_state[:, 0, :]
+        if args.embed_targets:  # Should not be used, but kept for reproducibility
+            new_embeddings = get_target_embeddings(
+                new_inputs, new_outputs, new_examples, target_word, new_orth
+            )
         else:
-            new_outputs = new_outputs.pooling_output
-            old_outputs = old_outputs.pooling_output
+            new_embeddings = get_sentence_embeddings(new_outputs, args.no_pooling)
+        old_embeddings = get_sentence_embeddings(old_outputs, args.no_pooling)
 
         # Clustering the new representations in order to get new senses
         ap = AffinityPropagation(random_state=42)
-        new_numpy = new_outputs.detach().numpy()
+        new_numpy = new_embeddings.detach().numpy()
         clustering = ap.fit(new_numpy)
 
         # Aligning the old and new senses
@@ -98,7 +143,7 @@ def main() -> None:
             examples = [new_examples[i] for i in examples_indices]
             this_cluster = new_numpy[clustering.labels_ == label]
             emb1 = torch.Tensor(this_cluster[0])
-            for emb2, _defs, sense_old in zip(old_outputs, old_glosses, senses_old):
+            for emb2, _defs, sense_old in zip(old_embeddings, old_glosses, senses_old):
                 if sense_old not in seen:
                     sim = F.cosine_similarity(emb1, emb2, dim=0)
                     if sim.item() >= args.st:
@@ -110,11 +155,7 @@ def main() -> None:
             for ex in examples:
                 exs2senses[ex] = found
 
-        if len(new_examples) != new_usage_ids.shape[0]:
-            diff = f"{len(new_examples)} != {new_usage_ids.shape[0]}"
-            msg = f"Unequal lengths of new examples and usage IDs: {diff}"
-            raise ValueError(msg)
-
+        assert len(new_examples) == new_usage_ids.shape[0]
         for usage_id, example in zip(new_usage_ids, new_examples):
             system_answer = exs2senses[example]
             row_number = targets[targets[USAGE_ID_COLUMN] == usage_id].index
