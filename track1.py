@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     arg("--st", help="Similarity threshold", type=float, default=0.3)
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
+    arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
     return parser.parse_args()
 
 
@@ -142,6 +143,8 @@ def main() -> None:
             examples_indices = np.where(clustering.labels_ == label)[0]
             examples = [new_examples[i] for i in examples_indices]
             this_cluster = new_numpy[clustering.labels_ == label]
+            if args.cluster_means:
+                emb1 = torch.Tensor(this_cluster.mean(axis=0))
             emb1 = torch.Tensor(this_cluster[0])
             for emb2, _defs, sense_old in zip(old_embeddings, old_glosses, senses_old):
                 if sense_old not in seen:
