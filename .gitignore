@@ -1,5 +1,6 @@
 .ruff_cache/
 axolotl24_shared_task/
+predictions/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
