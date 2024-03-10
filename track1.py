@@ -39,6 +39,8 @@ def parse_args() -> argparse.Namespace:
     arg("--st", help="Similarity threshold", type=float, default=0.3)
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
+    arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
+    arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
     return parser.parse_args()
 
 
@@ -135,25 +137,60 @@ def main() -> None:
         clustering = ap.fit(new_numpy)
 
         # Aligning the old and new senses
-        exs2senses = {}
-        seen = set()
-        for label in np.unique(clustering.labels_):
-            found = ""
-            examples_indices = np.where(clustering.labels_ == label)[0]
-            examples = [new_examples[i] for i in examples_indices]
-            this_cluster = new_numpy[clustering.labels_ == label]
-            emb1 = torch.Tensor(this_cluster[0])
-            for emb2, _defs, sense_old in zip(old_embeddings, old_glosses, senses_old):
-                if sense_old not in seen:
+        if args.non_greedy:
+            unique_labels = np.unique(clustering.labels_)
+            similarities = np.zeros((len(unique_labels), len(senses_old)))
+            for label in unique_labels:
+                this_cluster = new_numpy[clustering.labels_ == label]
+                if args.cluster_means:
+                    emb1 = torch.Tensor(this_cluster.mean(axis=0))
+                else:
+                    emb1 = torch.Tensor(this_cluster[0])
+                for old_sense, emb2 in enumerate(old_embeddings):
                     sim = F.cosine_similarity(emb1, emb2, dim=0)
-                    if sim.item() >= args.st:
-                        found = sense_old
-                        seen.add(sense_old)
-                        break
-            if not found:
-                found = f"{latin_name}_novel_{label}"
-            for ex in examples:
-                exs2senses[ex] = found
+                    similarities[label, old_sense] = sim
+            # assign old senses to labels where sim > threshold
+            similarities *= similarities >= args.st  # set sims < threshold to 0
+            unassigned_labels = set(unique_labels)
+            exs2senses = {}
+            while len(unassigned_labels):
+                if similarities.any():
+                    label, old_sense = np.unravel_index(similarities.argmax(), similarities.shape)
+                    similarities[label, :] = similarities[:, old_sense] = 0
+                    if -1 in unassigned_labels:  # unassigned_labels = {-1}
+                        label = -1
+                    unassigned_labels.remove(label)
+                    found = senses_old[old_sense]
+                else:
+                    label = unassigned_labels.pop()
+                    found = f"{latin_name}_novel_{label}"
+                examples_indices = np.where(clustering.labels_ == label)[0]
+                examples = [new_examples[i] for i in examples_indices]
+                for ex in examples:
+                    exs2senses[ex] = found
+        else:
+            exs2senses = {}
+            seen = set()
+            for label in np.unique(clustering.labels_):
+                found = ""
+                examples_indices = np.where(clustering.labels_ == label)[0]
+                examples = [new_examples[i] for i in examples_indices]
+                this_cluster = new_numpy[clustering.labels_ == label]
+                if args.cluster_means:
+                    emb1 = torch.Tensor(this_cluster.mean(axis=0))
+                else:
+                    emb1 = torch.Tensor(this_cluster[0])
+                for emb2, sense_old in zip(old_embeddings, senses_old):
+                    if sense_old not in seen:
+                        sim = F.cosine_similarity(emb1, emb2, dim=0)
+                        if sim.item() >= args.st:
+                            found = sense_old
+                            seen.add(sense_old)
+                            break
+                if not found:
+                    found = f"{latin_name}_novel_{label}"
+                for ex in examples:
+                    exs2senses[ex] = found
 
         assert len(new_examples) == new_usage_ids.shape[0]
         for usage_id, example in zip(new_usage_ids, new_examples):
