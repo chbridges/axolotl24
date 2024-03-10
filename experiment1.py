@@ -9,6 +9,8 @@ parser.add_argument("language", choices=["fi", "ru"], help="Language to run expe
 parser.add_argument(
     "split", choices=["dev", "train"], default="dev", help="Split to run experiment on"
 )
+parser.add_argument("--no-pred", action="store_true", help="Only evaluate")
+parser.add_argument("--no-eval", action="store_true", help="Only predict")
 args, positional = parser.parse_known_args()
 
 positional = " ".join(positional)
@@ -23,5 +25,7 @@ pred = pred_dir / f"pred.dev.args.{args.language}.tsv"
 
 pred_dir.mkdir(exist_ok=True)
 
-os.system(f"python {predictor!s} --test {gold!s} --pred {pred!s} {positional}")
-os.system(f"python {scorer!s} --gold {gold!s} --pred {pred!s}")
+if not args.no_pred:
+    os.system(f"python {predictor!s} --test {gold!s} --pred {pred!s} {positional}")
+if not args.no_eval:
+    os.system(f"python {scorer!s} --gold {gold!s} --pred {pred!s}")
