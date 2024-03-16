@@ -7,6 +7,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from sklearn.cluster import AffinityPropagation
+from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 from transformers import (
     AutoModel,
@@ -41,6 +42,7 @@ def parse_args() -> argparse.Namespace:
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
     arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
+    arg("--cosine", help="Use cosine similarity as cluster affinity", action="store_true")
     return parser.parse_args()
 
 
@@ -132,9 +134,14 @@ def main() -> None:
         old_embeddings = get_sentence_embeddings(old_outputs, args.no_pooling)
 
         # Clustering the new representations in order to get new senses
-        ap = AffinityPropagation(random_state=42)
         new_numpy = new_embeddings.detach().numpy()
-        clustering = ap.fit(new_numpy)
+        if args.cosine:
+            ap = AffinityPropagation(random_state=42, affinity="precomputed")
+            similarities = cosine_similarity(new_numpy)
+            clustering = ap.fit(similarities)
+        else:
+            ap = AffinityPropagation(random_state=42)
+            clustering = ap.fit(new_numpy)
 
         # Aligning the old and new senses
         if args.non_greedy:
