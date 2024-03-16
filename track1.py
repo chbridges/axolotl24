@@ -68,9 +68,9 @@ def get_sentence_embeddings(outputs: ModelOutput, no_pooling: bool) -> torch.Ten
 # The new embeddings have a Cosine similarity with the sentence embeddings greater than 0.9,
 # but unfortunately, this approach negatively impacts the ARI and F1 scores.
 def find_target_id(example: str, target: str, orth: str) -> int:
-    idx = example.lower().find(target)
+    idx = example.lower().find(orth)
     if idx == -1:
-        idx = example.lower().find(orth)
+        idx = example.lower().find(target)
     return max(0, idx)
 
 
