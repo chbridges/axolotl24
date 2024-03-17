@@ -36,12 +36,15 @@ pred = pred_dir / f"pred.dev.args.{args.language}.tsv"
 
 pred_dir.mkdir(exist_ok=True)
 
+predict = f"python {predictor!s} --test {gold!s} --pred {pred!s} {positional}"
+evaluate = f"python {scorer!s} --gold {gold!s} --pred {pred!s}"
+
 
 if not args.plot:
     if args.pred:
-        os.system(f"python {predictor!s} --test {gold!s} --pred {pred!s} {positional}")
+        os.system(predict)
     if args.eval:
-        os.system(f"python {scorer!s} --gold {gold!s} --pred {pred!s}")
+        os.system(evaluate)
 
 else:
     plot_dir = Path() / "plots"
@@ -53,13 +56,16 @@ else:
     scores = {"ari": [], "f1": []}
 
     for st in thresholds:
-        logging.info(f"Running experiments with threshold: {st}")
-        os.system(f"python {predictor!s} --test {gold!s} --pred {pred!s} --st {st} {positional}")
-        os.system(f"python {scorer!s} --gold {gold!s} --pred {pred!s}")
+        logging.info(f"Running experiment with threshold: {st}")
+        os.system(f"{predict} --st {st}")
+        os.system(evaluate)
         with (Path() / "track1_out.txt").open() as file:
             lines = [line.strip() for line in file.readlines()]
-        scores["ari"].append(float(lines[0][5:]))
-        scores["f1"].append(float(lines[1][4:]))
+        ari = float(lines[0][5:])
+        f1 = float(lines[1][4:])
+        logging.info(f"Threshold: {st}\tARI: {ari}\tF1: {f1}")
+        scores["ari"].append(ari)
+        scores["f1"].append(f1)
 
     plt.figure()
     plt.plot(thresholds, scores["ari"], label="ARI")
