@@ -53,7 +53,7 @@ else:
     scores = {"ari": [], "f1": []}
 
     for st in thresholds:
-        logging.info(f"Threshold: {st}")
+        logging.info(f"Running experiments with threshold: {st}")
         os.system(f"python {predictor!s} --test {gold!s} --pred {pred!s} --st {st} {positional}")
         os.system(f"python {scorer!s} --gold {gold!s} --pred {pred!s}")
         with (Path() / "track1_out.txt").open() as file:
