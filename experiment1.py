@@ -15,8 +15,8 @@ parser.add_argument("language", choices=["fi", "ru"], help="Language to run expe
 parser.add_argument(
     "split", choices=["dev", "train"], default="dev", help="Split to run experiment on"
 )
-parser.add_argument("--no-pred", action="store_true", help="Only evaluate")
-parser.add_argument("--no-eval", action="store_true", help="Only predict")
+parser.add_argument("pred", action="store_true", help="Run predictions")
+parser.add_argument("eval", action="store_true", help="Run evaluation")
 parser.add_argument(
     "--plot",
     action="store_true",
@@ -38,9 +38,9 @@ pred_dir.mkdir(exist_ok=True)
 
 
 if not args.plot:
-    if not args.no_pred:
+    if args.pred:
         os.system(f"python {predictor!s} --test {gold!s} --pred {pred!s} {positional}")
-    if not args.no_eval:
+    if args.eval:
         os.system(f"python {scorer!s} --gold {gold!s} --pred {pred!s}")
 
 else:
