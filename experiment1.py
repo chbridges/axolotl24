@@ -16,12 +16,13 @@ parser.add_argument("language", choices=["fi", "ru"], help="Language to run expe
 parser.add_argument(
     "split", choices=["dev", "train"], default="dev", help="Split to run experiment on"
 )
-parser.add_argument("pred", action="store_true", help="Run predictions")
-parser.add_argument("eval", action="store_true", help="Run evaluation")
+parser.add_argument("--pred", "-p",  action="store_true", help="Run predictions")
+parser.add_argument("--eval", "-e", action="store_true", help="Run evaluation")
 parser.add_argument(
-    "--plot",
+    "--full",
+    "-f",
     action="store_true",
-    help="Run experiments for multiple thresholds and plot the results",
+    help="Run experiments for multiple thresholds and store & plot the results",
 )
 args, positional = parser.parse_known_args()
 
@@ -41,7 +42,7 @@ predict = f"python {predictor!s} --test {gold!s} --pred {pred!s} {positional}"
 evaluate = f"python {scorer!s} --gold {gold!s} --pred {pred!s}"
 
 
-if not args.plot:
+if not args.full:
     if args.pred:
         os.system(predict)
     if args.eval:
