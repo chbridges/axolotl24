@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,9 +54,10 @@ else:
     handle = re.sub(r"(--)|( --)| ", "_", handle)
 
     thresholds = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    scores = {"ari": [], "f1": []}
+    scores = {"handle": handle, "ari": [], "f1": [], "threshold": thresholds}
 
     for st in thresholds:
+        # Run prediction & evaluation for each threshold in range
         logging.info(f"Running experiment with threshold: {st}")
         os.system(f"{predict} --st {st}")
         os.system(evaluate)
@@ -67,6 +69,18 @@ else:
         scores["ari"].append(ari)
         scores["f1"].append(f1)
 
+    # Save results
+    scores_path = pred_dir / f"scores_{args.language}_{args.split}.csv"
+    if scores_path.exists():
+        scores_df = pd.read_csv(scores_path)
+        scores_df = scores_df[scores_df["handle"] != handle]
+        scores_df = pd.concat([scores_df, pd.DataFrame.from_dict(scores)])
+    else:
+        scores_df = pd.DataFrame.from_dict(scores)
+    scores_df = scores_df.sort_values(by=["handle", "threshold"])
+    scores_df.to_csv(scores_path, index=False)
+
+    # Plot result and save the figure
     plt.figure()
     plt.plot(thresholds, scores["ari"], label="ARI")
     plt.plot(thresholds, scores["f1"], label="F1")
