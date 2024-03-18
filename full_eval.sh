@@ -2,7 +2,7 @@
 
 set -e
 
-[ "$#" -ge 3 ] || { echo Usage: "$0 {fi,ru} {dev, train}" >&2; exit 1; }
+[ "$#" -ge 3 ] || { echo Usage: "$0 {fi,ru} {dev,train}" >&2; exit 1; }
 
 python experiment1.py "$1" "$2" --full
 python experiment1.py "$1" "$2" --full --cluster-means
