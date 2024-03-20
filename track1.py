@@ -7,6 +7,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from sklearn.cluster import AffinityPropagation
+from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 from transformers import (
@@ -43,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
     arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
     arg("--cosine", help="Use cosine similarity as cluster affinity", action="store_true")
+    arg("--pca", help="Reduce dimensionality with PCA", action="store_true")
     return parser.parse_args()
 
 
@@ -135,6 +137,11 @@ def main() -> None:
 
         # Clustering the new representations in order to get new senses
         new_numpy = new_embeddings.detach().numpy()
+        old_numpy = old_embeddings.detach().numpy()
+        if args.pca:
+            pca = PCA()
+            new_numpy = pca.fit_transform(new_numpy)
+            old_numpy = pca.transform(old_numpy)
         if args.cosine:
             ap = AffinityPropagation(random_state=42, affinity="precomputed")
             similarities = cosine_similarity(new_numpy)
@@ -153,7 +160,8 @@ def main() -> None:
                     emb1 = torch.Tensor(this_cluster.mean(axis=0))
                 else:
                     emb1 = torch.Tensor(this_cluster[0])
-                for old_sense, emb2 in enumerate(old_embeddings):
+                for old_sense, old_emb in enumerate(old_numpy):
+                    emb2 = torch.Tensor(old_emb)
                     sim = F.cosine_similarity(emb1, emb2, dim=0)
                     similarities[label, old_sense] = sim
             # assign old senses to labels where sim > threshold
@@ -187,7 +195,8 @@ def main() -> None:
                     emb1 = torch.Tensor(this_cluster.mean(axis=0))
                 else:
                     emb1 = torch.Tensor(this_cluster[0])
-                for emb2, sense_old in zip(old_embeddings, senses_old):
+                for old_emb, sense_old in zip(old_numpy, senses_old):
+                    emb2 = torch.Tensor(old_emb)
                     if sense_old not in seen:
                         sim = F.cosine_similarity(emb1, emb2, dim=0)
                         if sim.item() >= args.st:
