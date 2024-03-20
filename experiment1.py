@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -60,7 +61,9 @@ else:
     for st in thresholds:
         # Run prediction & evaluation for each threshold in range
         logging.info(f"Running experiment with threshold: {st}")
+        start = datetime.now()
         os.system(f"{predict} --st {st}")
+        end = datetime.now()
         os.system(evaluate)
         with (Path() / "track1_out.txt").open() as file:
             lines = [line.strip() for line in file.readlines()]
@@ -69,6 +72,7 @@ else:
         logging.info(f"Threshold: {st}\tARI: {ari}\tF1: {f1}")
         scores["ari"].append(ari)
         scores["f1"].append(f1)
+        scores["time"].append((end - start).total_seconds())
 
     # Save results
     scores_path = pred_dir / f"scores_{args.language}_{args.split}.csv"
