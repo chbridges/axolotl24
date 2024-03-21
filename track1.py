@@ -1,6 +1,7 @@
 import argparse
 import logging
 import random
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -30,6 +31,7 @@ random.seed(0)
 np.random.default_rng(0)
 torch.use_deterministic_algorithms(True)
 logging.basicConfig(level=logging.INFO)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     arg("--pred", help="Path to the TSV file with system predictions", required=True)
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
-    arg("--clusters", help="Number of clusters to ensemble", type=int, default=1)
+    arg("--clusterings", help="Number of clusterings to ensemble, 5 is good", type=int, default=1)
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
@@ -148,11 +150,11 @@ def main() -> None:
             features = cosine_similarity(new_numpy)
             estimators = [
                 AffinityPropagation(random_state=42+i, affinity="precomputed")
-                for i in range(args.clusters)
+                for i in range(args.clusterings)
             ]
         else:
             features = new_numpy
-            estimators = [AffinityPropagation(random_state=42+i) for i in range(args.clusters)]
+            estimators = [AffinityPropagation(random_state=42+i) for i in range(args.clusterings)]
 
         ensemble_clusterings = np.vstack([ap.fit_predict(features) for ap in estimators])
         ensemble_clusterings[ensemble_clusterings == -1] = 0
