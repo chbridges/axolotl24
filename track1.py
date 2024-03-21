@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     arg("--pred", help="Path to the TSV file with system predictions", required=True)
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
+    arg("--clusters", help="Number of clusters to ensemble", type=int, default=1)
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
@@ -142,20 +143,32 @@ def main() -> None:
             pca = PCA()
             new_numpy = pca.fit_transform(new_numpy)
             old_numpy = pca.transform(old_numpy)
+
         if args.cosine:
-            ap = AffinityPropagation(random_state=42, affinity="precomputed")
-            similarities = cosine_similarity(new_numpy)
-            clustering = ap.fit(similarities)
+            features = cosine_similarity(new_numpy)
+            estimators = [
+                AffinityPropagation(random_state=42+i, affinity="precomputed")
+                for i in range(args.clusters)
+            ]
         else:
-            ap = AffinityPropagation(random_state=42)
-            clustering = ap.fit(new_numpy)
+            features = new_numpy
+            estimators = [AffinityPropagation(random_state=42+i) for i in range(args.clusters)]
+
+        ensemble_clusterings = np.vstack([ap.fit_predict(features) for ap in estimators])
+        ensemble_clusterings[ensemble_clusterings == -1] = 0
+
+        clustering = np.apply_along_axis(
+            lambda x: np.argmax(np.bincount(x)),
+            axis=0,
+            arr=ensemble_clusterings,
+        )
 
         # Aligning the old and new senses
         if args.non_greedy:
-            unique_labels = np.unique(clustering.labels_)
+            unique_labels = np.unique(clustering)
             similarities = np.zeros((len(unique_labels), len(senses_old)))
             for label in unique_labels:
-                this_cluster = new_numpy[clustering.labels_ == label]
+                this_cluster = new_numpy[clustering == label]
                 if args.cluster_means:
                     emb1 = torch.Tensor(this_cluster.mean(axis=0))
                 else:
@@ -179,11 +192,11 @@ def main() -> None:
         else:
             exs2senses = {}
             seen = set()
-            for label in np.unique(clustering.labels_):
+            for label in np.unique(clustering):
                 found = ""
-                examples_indices = np.where(clustering.labels_ == label)[0]
+                examples_indices = np.where(clustering == label)[0]
                 examples = [new_examples[i] for i in examples_indices]
-                this_cluster = new_numpy[clustering.labels_ == label]
+                this_cluster = new_numpy[clustering == label]
                 if args.cluster_means:
                     emb1 = torch.Tensor(this_cluster.mean(axis=0))
                 else:
