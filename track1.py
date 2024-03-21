@@ -165,19 +165,12 @@ def main() -> None:
                     sim = F.cosine_similarity(emb1, emb2, dim=0)
                     similarities[label, old_sense] = sim
             # assign old senses to labels where sim > threshold
-            similarities *= similarities >= args.st  # set sims < threshold to 0
-            unassigned_labels = set(unique_labels)
             exs2senses = {}
-            while len(unassigned_labels):
-                if similarities.any():
-                    label, old_sense = np.unravel_index(similarities.argmax(), similarities.shape)
-                    similarities[label, :] = similarities[:, old_sense] = 0
-                    if -1 in unassigned_labels:  # unassigned_labels = {-1}
-                        label = -1
-                    unassigned_labels.remove(label)
+            closest_senses = similarities.argmax(axis=1)
+            for label, old_sense in zip(unique_labels, closest_senses):
+                if similarities[label, old_sense] >= args.st:
                     found = senses_old[old_sense]
                 else:
-                    label = unassigned_labels.pop()
                     found = f"{latin_name}_novel_{label}"
                 examples_indices = np.where(clustering.labels_ == label)[0]
                 examples = [new_examples[i] for i in examples_indices]
