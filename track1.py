@@ -207,7 +207,7 @@ def main() -> None:
                     found = senses_old[old_sense]
                 else:
                     found = f"{latin_name}_novel_{label}"
-                examples_indices = np.where(clustering.labels_ == label)[0]
+                examples_indices = np.where(clustering == label)[0]
                 examples = [new_examples[i] for i in examples_indices]
                 for ex in examples:
                     exs2senses[ex] = found
