@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
     arg("--clusterings", help="Number of clusterings to ensemble, 5 is fine", type=int, default=1)
-    arg("--ensemble-model", help="Ensemble sentence embeddings with a second model")
+    arg("--ensemble-models", help="Ensemble sentence embeddings with more models", nargs="+")
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
@@ -105,8 +105,9 @@ def main() -> None:
     tokenizer, model = load_model(args)
     tokenizers, models = [tokenizer], [model]
 
-    if args.ensemble_model:
-            args.model = args.ensemble_model
+    if args.ensemble_models:
+        for ensemble_model in args.ensemble_models:
+            args.model = ensemble_model
             tokenizer, model = load_model(args)
             tokenizers.append(tokenizer)
             models.append(model)
