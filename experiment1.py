@@ -53,9 +53,9 @@ else:
     plot_dir = Path() / "plots"
     plot_dir.mkdir(exist_ok=True)
     handle = f"{args.language}_{args.split}{''.join(positional)}"
-    handle = re.sub(r"(--)|( --)| ", "_", handle)
+    handle = re.sub(r"(--)|( --)|/| ", "_", handle)
 
-    thresholds = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+    thresholds = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     scores = {"handle": handle, "ari": [], "f1": [], "threshold": thresholds, "time": []}
 
     for st in thresholds:
@@ -89,7 +89,7 @@ else:
     plt.figure()
     plt.plot(thresholds, scores["ari"], label="ARI")
     plt.plot(thresholds, scores["f1"], label="F1")
-    plt.xlim(0, 0.5)
+    plt.xlim(0, 1)
     plt.ylim(0, 1)
     plt.xlabel("Threshold")
     plt.title(handle)
