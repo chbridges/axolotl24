@@ -41,12 +41,13 @@ def parse_args() -> argparse.Namespace:
     arg("--pred", help="Path to the TSV file with system predictions", required=True)
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
-    arg("--clusterings", help="Number of clusterings to ensemble, 5 is good", type=int, default=1)
-    arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
-    arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
+    arg("--clusterings", help="Number of clusterings to ensemble, 5 is fine", type=int, default=1)
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
-    arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
     arg("--cosine", help="Use cosine similarity as cluster affinity", action="store_true")
+    arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
+    arg("--ensemble-models", help="Ensemble sentence embeddings with more models", nargs="+")
+    arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
+    arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
     arg("--pca", help="Reduce dimensionality with PCA", action="store_true")
     return parser.parse_args()
 
@@ -64,8 +65,8 @@ def load_model(
 
 # We achieve improvements in both ARI and F1 by using the raw last hidden state of
 # the CLS token instead of using pooling_output (which feeds it through BertPooler)
-def get_sentence_embeddings(outputs: ModelOutput, no_pooling: bool) -> torch.Tensor:
-    if no_pooling:
+def get_sentence_embeddings(outputs: ModelOutput, arguments: argparse.Namespace) -> torch.Tensor:
+    if arguments.no_pooling:
         return outputs.last_hidden_state[:, 0, :]
     return outputs.pooler_output
 
@@ -102,6 +103,15 @@ def get_target_embeddings(
 def main() -> None:
     args = parse_args()
     tokenizer, model = load_model(args)
+    tokenizers, models = [tokenizer], [model]
+
+    if args.ensemble_models:
+        for ensemble_model in args.ensemble_models:
+            args.model = ensemble_model
+            tokenizer, model = load_model(args)
+            tokenizers.append(tokenizer)
+            models.append(model)
+
     targets = pd.read_csv(args.test, sep="\t")
     for target_word in tqdm(targets.word.unique()):
         this_word = targets[targets.word == target_word]
@@ -124,19 +134,30 @@ def main() -> None:
             "truncation": True,
             "max_length": 256,
         }
-        new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
-        old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
-        with torch.no_grad():
-            new_outputs = model(**new_inputs)
-            old_outputs = model(**old_inputs)
 
-        if args.embed_targets:  # Should not be used, but kept for reproducibility
-            new_embeddings = get_target_embeddings(
-                new_inputs, new_outputs, new_examples, target_word, new_orth
-            )
-        else:
-            new_embeddings = get_sentence_embeddings(new_outputs, args.no_pooling)
-        old_embeddings = get_sentence_embeddings(old_outputs, args.no_pooling)
+        new_embeddings_per_model = []
+        old_embeddings_per_model = []
+
+        for tokenizer, model in zip(tokenizers, models):
+            new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
+            old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
+            with torch.no_grad():
+                new_outputs = model(**new_inputs)
+                old_outputs = model(**old_inputs)
+
+            if args.embed_targets:  # Should not be used, but kept for reproducibility
+                new_embeddings = get_target_embeddings(
+                    new_inputs, new_outputs, new_examples, target_word, new_orth
+                )
+            else:
+                new_embeddings = get_sentence_embeddings(new_outputs, args)
+            old_embeddings = get_sentence_embeddings(old_outputs, args)
+
+            new_embeddings_per_model.append(new_embeddings)
+            old_embeddings_per_model.append(old_embeddings)
+
+        new_embeddings = torch.cat(new_embeddings_per_model, axis=1)
+        old_embeddings = torch.cat(old_embeddings_per_model, axis=1)
 
         # Clustering the new representations in order to get new senses
         new_numpy = new_embeddings.detach().numpy()
@@ -187,7 +208,7 @@ def main() -> None:
                     found = senses_old[old_sense]
                 else:
                     found = f"{latin_name}_novel_{label}"
-                examples_indices = np.where(clustering.labels_ == label)[0]
+                examples_indices = np.where(clustering == label)[0]
                 examples = [new_examples[i] for i in examples_indices]
                 for ex in examples:
                     exs2senses[ex] = found
