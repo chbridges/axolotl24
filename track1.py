@@ -42,6 +42,7 @@ def parse_args() -> argparse.Namespace:
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
     arg("--clusterings", help="Number of clusterings to ensemble, 5 is good", type=int, default=1)
+    arg("--ensemble-labse", help="Ensemble the given model with LaBSE", action="store_true")
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
@@ -102,6 +103,14 @@ def get_target_embeddings(
 def main() -> None:
     args = parse_args()
     tokenizer, model = load_model(args)
+    tokenizers, models = [tokenizer], [model]
+
+    if args.ensemble_labse:
+            args.model = "sentence-transformers/LaBSE"
+            tokenizer, model = load_model(args)
+            tokenizers.append(tokenizer)
+            models.append(model)
+
     targets = pd.read_csv(args.test, sep="\t")
     for target_word in tqdm(targets.word.unique()):
         this_word = targets[targets.word == target_word]
@@ -124,19 +133,30 @@ def main() -> None:
             "truncation": True,
             "max_length": 256,
         }
-        new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
-        old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
-        with torch.no_grad():
-            new_outputs = model(**new_inputs)
-            old_outputs = model(**old_inputs)
 
-        if args.embed_targets:  # Should not be used, but kept for reproducibility
-            new_embeddings = get_target_embeddings(
-                new_inputs, new_outputs, new_examples, target_word, new_orth
-            )
-        else:
-            new_embeddings = get_sentence_embeddings(new_outputs, args.no_pooling)
-        old_embeddings = get_sentence_embeddings(old_outputs, args.no_pooling)
+        new_embeddings_per_model = []
+        old_embeddings_per_model = []
+
+        for tokenizer, model in zip(tokenizers, models):
+            new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
+            old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
+            with torch.no_grad():
+                new_outputs = model(**new_inputs)
+                old_outputs = model(**old_inputs)
+
+            if args.embed_targets:  # Should not be used, but kept for reproducibility
+                new_embeddings = get_target_embeddings(
+                    new_inputs, new_outputs, new_examples, target_word, new_orth
+                )
+            else:
+                new_embeddings = get_sentence_embeddings(new_outputs, args.no_pooling)
+            old_embeddings = get_sentence_embeddings(old_outputs, args.no_pooling)
+
+            new_embeddings_per_model.append(new_embeddings)
+            old_embeddings_per_model.append(old_embeddings)
+
+        new_embeddings = torch.cat(new_embeddings_per_model, axis=1)
+        old_embeddings = torch.cat(old_embeddings_per_model, axis=1)
 
         # Clustering the new representations in order to get new senses
         new_numpy = new_embeddings.detach().numpy()
