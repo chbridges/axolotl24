@@ -41,8 +41,8 @@ def parse_args() -> argparse.Namespace:
     arg("--pred", help="Path to the TSV file with system predictions", required=True)
     arg("--model", help="Sentence embedding model", default="setu4993/LEALLA-large")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
-    arg("--clusterings", help="Number of clusterings to ensemble, 5 is good", type=int, default=1)
-    arg("--ensemble-labse", help="Ensemble the given model with LaBSE", action="store_true")
+    arg("--clusterings", help="Number of clusterings to ensemble, 5 is fine", type=int, default=1)
+    arg("--ensemble-model", help="Ensemble sentence embeddings with a second model")
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
@@ -105,8 +105,8 @@ def main() -> None:
     tokenizer, model = load_model(args)
     tokenizers, models = [tokenizer], [model]
 
-    if args.ensemble_labse:
-            args.model = "sentence-transformers/LaBSE"
+    if args.ensemble_model:
+            args.model = args.ensemble_model
             tokenizer, model = load_model(args)
             tokenizers.append(tokenizer)
             models.append(model)
