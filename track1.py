@@ -65,8 +65,8 @@ def load_model(
 
 # We achieve improvements in both ARI and F1 by using the raw last hidden state of
 # the CLS token instead of using pooling_output (which feeds it through BertPooler)
-def get_sentence_embeddings(outputs: ModelOutput, no_pooling: bool) -> torch.Tensor:
-    if no_pooling:
+def get_sentence_embeddings(outputs: ModelOutput, arguments: argparse.Namespace) -> torch.Tensor:
+    if arguments.no_pooling:
         return outputs.last_hidden_state[:, 0, :]
     return outputs.pooler_output
 
@@ -150,8 +150,8 @@ def main() -> None:
                     new_inputs, new_outputs, new_examples, target_word, new_orth
                 )
             else:
-                new_embeddings = get_sentence_embeddings(new_outputs, args.no_pooling)
-            old_embeddings = get_sentence_embeddings(old_outputs, args.no_pooling)
+                new_embeddings = get_sentence_embeddings(new_outputs, args)
+            old_embeddings = get_sentence_embeddings(old_outputs, args)
 
             new_embeddings_per_model.append(new_embeddings)
             old_embeddings_per_model.append(old_embeddings)
