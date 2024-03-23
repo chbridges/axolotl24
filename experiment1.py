@@ -69,6 +69,7 @@ else:
         "threshold": thresholds,
         "ari": [],
         "f1": [],
+        "am": [],
         "hm": [],
         "hm2": [],
         "time": [],
