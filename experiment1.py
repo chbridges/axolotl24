@@ -33,6 +33,7 @@ parser.add_argument(
     action="store_true",
     help="Run experiments for multiple thresholds and store & plot the results",
 )
+parser.add_argument("--plot", help="Plot results of full experiment")
 args, positional = parser.parse_known_args()
 
 positional = " ".join(positional)
@@ -109,21 +110,22 @@ else:
     scores_df.to_csv(scores_path, index=False)
 
     # Plot result and save the figure
-    max_am = thresholds[np.argmax(scores["am"])]
-    max_hm = thresholds[np.argmax(scores["hm"])]
-    max_hm2 = thresholds[np.argmax(scores["hm2"])]
-    plt.figure()
-    plt.plot(thresholds, scores["ari"], color="C0", label="ARI")
-    plt.plot(thresholds, scores["f1"], color="C1", label="F$_1$")
-    plt.vlines(max_am, 0, 1, color="C2", linestyles="--", label="max AM")
-    plt.vlines(max_hm, 0, 1, color="C3", linestyles="--", label="max HM")
-    plt.vlines(max_hm2, 0, 1, color="C4", linestyles="--", label="max HM$_2$")
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    plt.xticks(thresholds)
-    plt.yticks(thresholds)
-    plt.xlabel("Threshold")
-    plt.title(handle)
-    plt.legend()
-    plt.savefig(plot_dir / handle)
-    logging.info(f"Saved figure to {(plot_dir / handle)!s}")
+    if args.plot:
+        max_am = thresholds[np.argmax(scores["am"])]
+        max_hm = thresholds[np.argmax(scores["hm"])]
+        max_hm2 = thresholds[np.argmax(scores["hm2"])]
+        plt.figure()
+        plt.plot(thresholds, scores["ari"], color="C0", label="ARI")
+        plt.plot(thresholds, scores["f1"], color="C1", label="F$_1$")
+        plt.vlines(max_am, 0, 1, color="C2", linestyles="--", label="max AM")
+        plt.vlines(max_hm, 0, 1, color="C3", linestyles="--", label="max HM")
+        plt.vlines(max_hm2, 0, 1, color="C4", linestyles="--", label="max HM$_2$")
+        plt.xlim(min(thresholds), max(thresholds))
+        plt.ylim(min(thresholds), max(thresholds))
+        plt.xticks(thresholds)
+        plt.yticks(thresholds)
+        plt.xlabel("Threshold")
+        plt.title(handle)
+        plt.legend()
+        plt.savefig(plot_dir / handle)
+        logging.info(f"Saved figure to {(plot_dir / handle)!s}")
