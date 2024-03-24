@@ -23,7 +23,7 @@ long = {"fi": "finnish", "ru": "russian"}
 parser = argparse.ArgumentParser()
 parser.add_argument("language", choices=["fi", "ru"], help="Language to run experiment on")
 parser.add_argument(
-    "split", choices=["dev", "train"], default="dev", help="Split to run experiment on"
+    "split", choices=["train", "dev", "test"], default="dev", help="Split to run experiment on"
 )
 parser.add_argument("--pred", "-p", action="store_true", help="Run predictions")
 parser.add_argument("--eval", "-e", action="store_true", help="Run evaluation")
@@ -43,7 +43,7 @@ scorer = Path("./axolotl24_shared_task/code/evaluation/scorer_track1.py")
 gold_dir = Path(f"./axolotl24_shared_task/data/{long[args.language]}/")
 gold = gold_dir / f"axolotl.{args.split}.{args.language}.tsv"
 pred_dir = Path("./predictions/")
-pred = pred_dir / f"pred.dev.args.{args.language}.tsv"
+pred = pred_dir / f"pred.{args.split}.{args.language}.tsv"
 
 pred_dir.mkdir(exist_ok=True)
 
@@ -63,7 +63,7 @@ else:
     handle = f"{args.language}_{args.split}{''.join(positional)}"
     handle = re.sub(r"(--)|( --)|/| ", "_", handle)
 
-    thresholds = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5]
     scores = {
         "handle": handle,
         "threshold": thresholds,
