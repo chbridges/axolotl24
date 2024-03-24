@@ -1,7 +1,6 @@
 .ruff_cache/
 axolotl24_shared_task/
 plots/
-predictions/
 track1_out.txt
 
 # Byte-compiled / optimized / DLL files

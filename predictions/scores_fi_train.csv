@@ -1,0 +1,12 @@
+handle,threshold,ari,f1,am,hm,hm2,time
+fi_train_model_setu4993_LEALLA-large,0.0,0.021,0.258,0.1395,0.039,0.026,4443.532
+fi_train_model_setu4993_LEALLA-large,0.1,0.021,0.258,0.1395,0.039,0.026,4406.52
+fi_train_model_setu4993_LEALLA-large,0.2,0.021,0.259,0.14,0.039,0.026,4401.21
+fi_train_model_setu4993_LEALLA-large,0.3,0.021,0.238,0.1295,0.039,0.026,4410.129
+fi_train_model_setu4993_LEALLA-large,0.4,0.021,0.186,0.1035,0.038,0.026,4412.768
+fi_train_model_setu4993_LEALLA-large,0.5,0.021,0.101,0.061000000000000006,0.035,0.025,4207.18
+fi_train_model_setu4993_LEALLA-large,0.6,0.021,0.057,0.039,0.031,0.024,4212.179
+fi_train_model_setu4993_LEALLA-large,0.7,0.021,0.047,0.034,0.029,0.024,4211.447
+fi_train_model_setu4993_LEALLA-large,0.8,0.021,0.047,0.034,0.029,0.024,4210.848
+fi_train_model_setu4993_LEALLA-large,0.9,0.021,0.046,0.0335,0.029,0.024,4209.003
+fi_train_model_setu4993_LEALLA-large,1.0,0.021,0.046,0.0335,0.029,0.024,4223.866
