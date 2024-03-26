@@ -21,7 +21,7 @@ def harmonic_mean(f1: float, ari: float, beta: float = 1.0) -> float:
 long = {"fi": "finnish", "ru": "russian"}
 
 parser = argparse.ArgumentParser()
-parser.add_argument("language", choices=["fi", "ru"], help="Language to run experiment on")
+parser.add_argument("language", choices=["fi", "ru", "de"], help="Language to run experiment on")
 parser.add_argument(
     "split", choices=["train", "dev", "test"], default="dev", help="Split to run experiment on"
 )
@@ -41,7 +41,10 @@ positional = " ".join(positional)
 predictor = Path("./track1.py")
 scorer = Path("./axolotl24_shared_task/code/evaluation/scorer_track1.py")
 
-gold_dir = Path(f"./axolotl24_shared_task/data/{long[args.language]}/")
+if args.split == "test":
+    gold_dir = Path("./axolotl24_shared_task/data/test/")
+else:
+    gold_dir = Path(f"./axolotl24_shared_task/data/{long[args.language]}/")
 gold = gold_dir / f"axolotl.{args.split}.{args.language}.tsv"
 pred_dir = Path("./predictions/")
 pred = pred_dir / f"pred.{args.split}.{args.language}.tsv"
