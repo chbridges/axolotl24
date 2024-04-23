@@ -8,9 +8,9 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
-from sklearn.cluster import AffinityPropagation
+from sklearn.cluster import DBSCAN, AffinityPropagation
 from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_distances, cosine_similarity, euclidean_distances
 from tqdm import tqdm
 from transformers import (
     AutoModel,
@@ -30,7 +30,6 @@ PERIOD_COLUMN = "period"
 torch.manual_seed(0)
 random.seed(0)
 np.random.default_rng(0)
-#torch.use_deterministic_algorithms(True)
 logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -45,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     arg("--clusterings", help="Number of clusterings to ensemble, 5 is fine", type=int, default=1)
     arg("--cluster-means", help="Use align senses with cluster means", action="store_true")
     arg("--cosine", help="Use cosine similarity as cluster affinity", action="store_true")
+    arg("--dbscan", help="Use DBSCAN instead of Affinity Propagation", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--ensemble-models", help="Ensemble sentence embeddings with more models", nargs="+")
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
@@ -109,8 +109,7 @@ def main() -> None:
     if args.sbert:
         models = [SentenceTransformer(args.model)]
         if args.ensemble_models:
-            for ensemble_model in args.ensemble_models:
-                models.append(SentenceTransformer(ensemble_model))
+            models.extend([(SentenceTransformer(model) for model in args.ensemble_models)])
 
     # original huggingface API
     else:
@@ -153,8 +152,12 @@ def main() -> None:
         # sentence-transformers
         if args.sbert:
             for model in models:
-                new_embeddings = model.encode(new_examples, show_progress_bar=False)
-                old_embeddings = model.encode(old_glosses, show_progress_bar=False)
+                new_embeddings = torch.from_numpy(
+                    model.encode(new_examples, show_progress_bar=False)
+                )
+                old_embeddings = torch.from_numpy(
+                    model.encode(old_glosses, show_progress_bar=False)
+                )
                 new_embeddings_per_model.append(new_embeddings)
                 old_embeddings_per_model.append(old_embeddings)
 
@@ -189,17 +192,29 @@ def main() -> None:
             new_numpy = pca.fit_transform(new_numpy)
             old_numpy = pca.transform(old_numpy)
 
-        if args.cosine:
+        # DBSCAN
+        if args.dbscan:
+            if args.cosine:
+                features = cosine_distances(new_numpy, new_numpy)
+            else:
+                features = euclidean_distances(new_numpy, new_numpy)
+            eps = 2 * max(features.mean(), 0.1)
+            estimators = [DBSCAN(eps=eps, min_samples=1, metric="precomputed")]
+
+        # Affinity Propagation
+        elif args.cosine:
             features = cosine_similarity(new_numpy)
             estimators = [
-                AffinityPropagation(random_state=42+i, affinity="precomputed")
+                AffinityPropagation(random_state=42 + i, affinity="precomputed")
                 for i in range(args.clusterings)
             ]
         else:
             features = new_numpy
-            estimators = [AffinityPropagation(random_state=42+i) for i in range(args.clusterings)]
+            estimators = [
+                AffinityPropagation(random_state=42 + i) for i in range(args.clusterings)
+            ]
 
-        ensemble_clusterings = np.vstack([ap.fit_predict(features) for ap in estimators])
+        ensemble_clusterings = np.vstack([est.fit_predict(features) for est in estimators])
         ensemble_clusterings[ensemble_clusterings == -1] = 0
 
         clustering = np.apply_along_axis(
@@ -214,8 +229,8 @@ def main() -> None:
         fill = [i for i in range(len(cluster_unique)) if i not in cluster_unique]
         ## change the labels
         for i in fill:
-            clustering_idx = np.where(clustering==cluster_unique.max())[0]
-            cluster_unique_idx = np.where(cluster_unique==cluster_unique.max())[0]
+            clustering_idx = np.where(clustering == cluster_unique.max())[0]
+            cluster_unique_idx = np.where(cluster_unique == cluster_unique.max())[0]
             clustering[clustering_idx] = i
             cluster_unique[cluster_unique_idx] = i
 
