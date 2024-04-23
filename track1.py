@@ -110,8 +110,6 @@ def main() -> None:
         models = [SentenceTransformer(args.model)]
         if args.ensemble_models:
             models.extend([SentenceTransformer(model) for model in args.ensemble_models])
-        print(models[-1])
-        exit()
 
     # original huggingface API
     else:
