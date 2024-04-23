@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from sentence_transformers import SentenceTransformer
 from sklearn.cluster import AffinityPropagation
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
@@ -29,7 +30,7 @@ PERIOD_COLUMN = "period"
 torch.manual_seed(0)
 random.seed(0)
 np.random.default_rng(0)
-torch.use_deterministic_algorithms(True)
+#torch.use_deterministic_algorithms(True)
 logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -49,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
     arg("--pca", help="Reduce dimensionality with PCA", action="store_true")
+    arg("--sbert", help="Use sentence-transformers instead of HuggingFace", action="store_true")
     return parser.parse_args()
 
 
@@ -102,15 +104,25 @@ def get_target_embeddings(
 
 def main() -> None:
     args = parse_args()
-    tokenizer, model = load_model(args)
-    tokenizers, models = [tokenizer], [model]
 
-    if args.ensemble_models:
-        for ensemble_model in args.ensemble_models:
-            args.model = ensemble_model
-            tokenizer, model = load_model(args)
-            tokenizers.append(tokenizer)
-            models.append(model)
+    # sentence-transformers
+    if args.sbert:
+        models = [SentenceTransformer(args.model)]
+        if args.ensemble_models:
+            for ensemble_model in args.ensemble_models:
+                models.append(SentenceTransformer(ensemble_model))
+
+    # original huggingface API
+    else:
+        tokenizer, model = load_model(args)
+        tokenizers, models = [tokenizer], [model]
+
+        if args.ensemble_models:
+            for ensemble_model in args.ensemble_models:
+                args.model = ensemble_model
+                tokenizer, model = load_model(args)
+                tokenizers.append(tokenizer)
+                models.append(model)
 
     targets = pd.read_csv(args.test, sep="\t")
     for target_word in tqdm(targets.word.unique()):
@@ -138,23 +150,33 @@ def main() -> None:
         new_embeddings_per_model = []
         old_embeddings_per_model = []
 
-        for tokenizer, model in zip(tokenizers, models):
-            new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
-            old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
-            with torch.no_grad():
-                new_outputs = model(**new_inputs)
-                old_outputs = model(**old_inputs)
+        # sentence-transformers
+        if args.sbert:
+            for model in models:
+                new_embeddings = model.encode(new_examples, show_progress_bar=False)
+                old_embeddings = model.encode(old_glosses, show_progress_bar=False)
+                new_embeddings_per_model.append(new_embeddings)
+                old_embeddings_per_model.append(old_embeddings)
 
-            if args.embed_targets:  # Should not be used, but kept for reproducibility
-                new_embeddings = get_target_embeddings(
-                    new_inputs, new_outputs, new_examples, target_word, new_orth
-                )
-            else:
-                new_embeddings = get_sentence_embeddings(new_outputs, args)
-            old_embeddings = get_sentence_embeddings(old_outputs, args)
+        # original huggingface API
+        else:
+            for tokenizer, model in zip(tokenizers, models):
+                new_inputs = tokenizer(new_examples, **tokenizer_kwargs)
+                old_inputs = tokenizer(old_glosses, **tokenizer_kwargs)
+                with torch.no_grad():
+                    new_outputs = model(**new_inputs)
+                    old_outputs = model(**old_inputs)
 
-            new_embeddings_per_model.append(new_embeddings)
-            old_embeddings_per_model.append(old_embeddings)
+                if args.embed_targets:  # Should not be used, but kept for reproducibility
+                    new_embeddings = get_target_embeddings(
+                        new_inputs, new_outputs, new_examples, target_word, new_orth
+                    )
+                else:
+                    new_embeddings = get_sentence_embeddings(new_outputs, args)
+                old_embeddings = get_sentence_embeddings(old_outputs, args)
+
+                new_embeddings_per_model.append(new_embeddings)
+                old_embeddings_per_model.append(old_embeddings)
 
         new_embeddings = torch.cat(new_embeddings_per_model, axis=1)
         old_embeddings = torch.cat(old_embeddings_per_model, axis=1)
@@ -185,6 +207,17 @@ def main() -> None:
             axis=0,
             arr=ensemble_clusterings,
         )
+
+        ## avoid errors from voting (unique cluster_label [0,2]) with the code below
+        cluster_unique = np.unique(clustering)
+        ## detect the missing labels in label sequence
+        fill = [i for i in range(len(cluster_unique)) if i not in cluster_unique]
+        ## change the labels
+        for i in fill:
+            clustering_idx = np.where(clustering==cluster_unique.max())[0]
+            cluster_unique_idx = np.where(cluster_unique==cluster_unique.max())[0]
+            clustering[clustering_idx] = i
+            cluster_unique[cluster_unique_idx] = i
 
         # Aligning the old and new senses
         if args.non_greedy:
