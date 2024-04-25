@@ -2,6 +2,7 @@ import argparse
 import logging
 import random
 import warnings
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -47,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     arg("--dbscan", help="Use DBSCAN instead of Affinity Propagation", action="store_true")
     arg("--embed-targets", help="Embed only the target word in the example", action="store_true")
     arg("--ensemble-models", help="Ensemble sentence embeddings with more models", nargs="+")
+    arg("--merge-novel", help="Merge novel sense clusters in a second pass", action="store_true")
     arg("--no-pooling", help="Output the last hidden state without pooling", action="store_true")
     arg("--non-greedy", help="Align old sense in a non-greedy manner", action="store_true")
     arg("--pca", help="Reduce dimensionality with PCA", action="store_true")
@@ -234,7 +236,10 @@ def main() -> None:
             clustering[clustering_idx] = i
             cluster_unique[cluster_unique_idx] = i
 
-        # Aligning the old and new senses
+        # Align the old and new senses
+        novel_labels = []
+        novel_senses = []
+
         if args.non_greedy:
             unique_labels = np.unique(clustering)
             similarities = np.zeros((len(unique_labels), len(senses_old)))
@@ -256,6 +261,8 @@ def main() -> None:
                     found = senses_old[old_sense]
                 else:
                     found = f"{latin_name}_novel_{label}"
+                    novel_labels.append(label)
+                    novel_senses.append(found)
                 examples_indices = np.where(clustering == label)[0]
                 examples = [new_examples[i] for i in examples_indices]
                 for ex in examples:
@@ -282,8 +289,48 @@ def main() -> None:
                             break
                 if not found:
                     found = f"{latin_name}_novel_{label}"
+                    novel_labels.append(label)
+                    novel_senses.append(found)
                 for ex in examples:
                     exs2senses[ex] = found
+
+        # 2nd pass to merge novel sense clusters
+        n = len(novel_labels)
+        if args.merge_novel and n:
+            similarities = np.zeros((n, n))
+
+            for i in range(n - 1):
+                label_i = novel_labels[i]
+                cluster_i = new_numpy[clustering == label_i]
+                emb_i = torch.Tensor(cluster_i.mean(axis=0))
+                for j in range(i + 1, n):
+                    label_j = novel_labels[j]
+                    cluster_j = new_numpy[clustering == label_j]
+                    emb_j = torch.Tensor(cluster_j.mean(axis=0))
+                    sim = F.cosine_similarity(emb_i, emb_j, dim=0)
+                    similarities[i, j] = similarities[j, i] = sim
+
+            closest_senses = similarities.argmax(axis=1)
+            to_merge = []
+            for i, j in enumerate(closest_senses):
+                if similarities[i, j] >= args.st:
+                    to_merge.append((min(i, j), max(i, j)))  # tuples so the pairs can be hashed
+            to_merge = [list(x) for x in set(to_merge)]  # lists so they can me merged
+            for x, y in combinations(to_merge, 2):
+                if not set(x).isdisjoint(y):
+                    x += y
+                    if y in to_merge:
+                        to_merge.remove(y)
+            to_merge = [sorted(set(x)) for x in to_merge]  # remove duplicates from lists
+
+            # overwrite senses to merge
+            for labels in to_merge:
+                sense = novel_senses[labels[0]]
+                for i in labels[1:]:
+                    examples_indices = np.where(clustering == novel_labels[i])[0]
+                    examples = [new_examples[j] for j in examples_indices]
+                    for ex in examples:
+                        exs2senses[ex] = sense
 
         assert len(new_examples) == new_usage_ids.shape[0]
         for usage_id, example in zip(new_usage_ids, new_examples):
