@@ -31,10 +31,19 @@ def parse_args() -> argparse.Namespace:
     arg = parser.add_argument
     arg("--test", help="Path to the TSV file with the test data", required=True)
     arg("--pred", help="Path to the TSV file with system predictions", required=True)
-    arg("--model", help="Sentence embedding model", default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
     arg("--st", help="Similarity threshold", type=float, default=0.3)
     arg("--clusterings", help="Number of clusterings to ensemble, 5 is fine", type=int, default=5)
-    arg("--ensemble-models", help="Ensemble sentence embeddings with more models", nargs="+", default=["sentence-transformers/LaBSE"])
+    arg(
+        "--model",
+        help="Sentence embedding model",
+        default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+    )
+    arg(
+        "--ensemble-models",
+        help="Ensemble sentence embeddings with more models",
+        nargs="+",
+        default=["sentence-transformers/LaBSE"],
+    )
     return parser.parse_args()
 
 
@@ -64,12 +73,8 @@ def main() -> None:
         old_embeddings_per_model = []
 
         for model in models:
-            new_embeddings = torch.from_numpy(
-                model.encode(new_examples, show_progress_bar=False)
-            )
-            old_embeddings = torch.from_numpy(
-                model.encode(old_glosses, show_progress_bar=False)
-            )
+            new_embeddings = torch.from_numpy(model.encode(new_examples, show_progress_bar=False))
+            old_embeddings = torch.from_numpy(model.encode(old_glosses, show_progress_bar=False))
             new_embeddings_per_model.append(new_embeddings)
             old_embeddings_per_model.append(old_embeddings)
 
