@@ -18,7 +18,7 @@ def harmonic_mean(f1: float, ari: float, beta: float = 1.0) -> float:
     return (1 + b2) * f1 * ari / (b2 * f1 + ari)
 
 
-long = {"fi": "finnish", "ru": "russian"}
+long = {"de": "german", "fi": "finnish", "ru": "russian"}
 
 parser = argparse.ArgumentParser()
 parser.add_argument("language", choices=["fi", "ru", "de"], help="Language to run experiment on")
@@ -31,7 +31,7 @@ parser.add_argument(
     "--full",
     "-f",
     action="store_true",
-    help="Run experiments for multiple thresholds and store & plot the results",
+    help="Run experiments for multiple thresholds and store the results",
 )
 parser.add_argument("--plot", help="Plot results of full experiment")
 args, positional = parser.parse_known_args()
@@ -41,13 +41,14 @@ positional = " ".join(positional)
 predictor = Path("./track1.py")
 scorer = Path("./axolotl24_shared_task/code/evaluation/scorer_track1.py")
 
+gold_dir = Path(f"./axolotl24_shared_task/data/{long[args.language]}/")
+language = "surprise" if args.language == "de" else args.language
 if args.split == "test":
-    gold_dir = Path("./axolotl24_shared_task/data/test/")
+    gold = gold_dir / f"axolotl.{args.split}.{language}.gold.tsv"
 else:
-    gold_dir = Path(f"./axolotl24_shared_task/data/{long[args.language]}/")
-gold = gold_dir / f"axolotl.{args.split}.{args.language}.tsv"
+    gold = gold_dir / f"axolotl.{args.split}.{language}.tsv"
 pred_dir = Path("./predictions/")
-pred = pred_dir / f"pred.{args.split}.{args.language}.tsv"
+pred = pred_dir / f"pred.{args.split}.{language}.tsv"
 
 pred_dir.mkdir(exist_ok=True)
 
