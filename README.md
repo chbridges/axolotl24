@@ -1,4 +1,4 @@
-# Holotniekat at AXOLOTL-24: Similarity-Based Cluster Merging
+# AXOLOTL-24: Similarity-Based Cluster Merging
 
 Code for the paper "Similarity-Based Cluster Merging for Semantic Change Modeling" at [LChange'24](https://www.changeiskey.org/event/2024-acl-lchange/).
 
@@ -20,7 +20,7 @@ We recommend using the higher-level wrapper ```experiment1.py``` to automate the
 python3 experiment1.py fi dev --pred --eval --st 0.2
 ```
 
-Additionally, ```track1_all_parameters.py``` runs the baseline by default and comes with 10 additional customizable parameters, not all of which have been described in the paper as they lead to uninteresting results. These arguments are explained in the code or ```python3 track1_all_parameters.py --help```.
+Additionally, ```track1_all_parameters.py``` runs the baseline by default and comes with 10 additional customizable parameters, not all of which have been described in the paper as they lead to uninteresting results. Run ```python3 track1_all_parameters.py --help``` for more information. Not supported by ```experiment1.py``` but you can simply rename the file to fix that.
 
 ## Reference
 
