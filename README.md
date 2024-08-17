@@ -4,7 +4,7 @@ Code for the paper [Similarity-Based Cluster Merging for Semantic Change Modelin
 
 ## Requirements
 
-Download the [AXOLOTL-24](https://github.com/ltgoslo/axolotl24_shared_task) dataset and install dependencies by running the following commands:
+Run the following commands to download the [AXOLOTL-24](https://github.com/ltgoslo/axolotl24_shared_task) dataset and install dependencies:
 
 ```
 git submodule init  
